@@ -15,6 +15,7 @@ app.use(cors({
     origin: [
         process.env.FRONTEND_URL || 'http://localhost:3000',
         process.env.MOBILE_URL || 'http://localhost:5000',
+        'https://frontend-web-3mlr.onrender.com'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
