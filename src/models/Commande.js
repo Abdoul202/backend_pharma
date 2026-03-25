@@ -6,7 +6,10 @@ const commandeItemSchema = new mongoose.Schema({
         ref: 'Medicine',
         required: true,
     },
-    nomMedicament: String,
+    nomMedicament: {
+        type: String,
+        required: true,
+    },
     forme: String,
     quantite: {
         type: Number,
@@ -33,6 +36,7 @@ const commandeSchema = new mongoose.Schema({
     patientNom: {
         type: String,
         trim: true,
+        maxlength: 200,
     },
     notes: {
         type: String,
@@ -65,18 +69,23 @@ const commandeSchema = new mongoose.Schema({
     annuleAt: Date,
 }, { timestamps: true });
 
-// Auto-generate reference before save
-commandeSchema.pre('save', async function (next) {
-    if (!this.reference) {
-        const count = await this.constructor.countDocuments();
-        const date = new Date();
-        const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-        this.reference = `CMD-${ymd}-${String(count + 1).padStart(5, '0')}`;
+// Atomic reference generation using a counter
+commandeSchema.statics.generateReference = async function () {
+    const date = new Date();
+    const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+    const prefix = `CMD-${ymd}-`;
+
+    const last = await this.findOne({ reference: { $regex: `^${prefix}` } }).sort({ reference: -1 }).select('reference').lean();
+    let seq = 1;
+    if (last && last.reference) {
+        const parts = last.reference.split('-');
+        seq = parseInt(parts[parts.length - 1], 10) + 1;
     }
-    next();
-});
+    return `${prefix}${String(seq).padStart(5, '0')}`;
+};
 
 commandeSchema.index({ pharmacienRef: 1, createdAt: -1 });
 commandeSchema.index({ statut: 1, createdAt: -1 });
+commandeSchema.index({ reference: 1 });
 
 module.exports = mongoose.model('Commande', commandeSchema);

@@ -3,19 +3,32 @@ const Lot = require('../models/Lot');
 const { logActivity } = require('../middleware/activityLogger');
 const xlsx = require('xlsx');
 
+// Whitelist of allowed fields for create/update
+const ALLOWED_FIELDS = ['nom', 'dci', 'forme', 'dosage', 'categorie', 'prixVente', 'prixAchat', 'seuilAlerte', 'unite', 'codeBarres', 'description', 'fabricant'];
+
+const pickAllowed = (body) => {
+    const picked = {};
+    for (const key of ALLOWED_FIELDS) {
+        if (body[key] !== undefined) picked[key] = body[key];
+    }
+    return picked;
+};
+
 // GET /medicines
 exports.getAll = async (req, res, next) => {
     try {
         const { search, categorie, forme, page = 1, limit = 20, withStock = false } = req.query;
+        const parsedLimit = Math.min(parseInt(limit) || 20, 100);
+        const parsedPage = parseInt(page) || 1;
 
         const filter = { deletedAt: null };
         if (categorie) filter.categorie = categorie;
         if (forme) filter.forme = forme;
         if (search) filter.$text = { $search: search };
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parsedPage - 1) * parsedLimit;
 
-        let query = Medicine.find(filter).skip(skip).limit(parseInt(limit)).sort({ nom: 1 });
+        let query = Medicine.find(filter).skip(skip).limit(parsedLimit).sort({ nom: 1 });
         if (withStock === 'true') query = query.populate('stockTotal');
 
         const [medicines, total] = await Promise.all([query, Medicine.countDocuments(filter)]);
@@ -40,7 +53,7 @@ exports.getAll = async (req, res, next) => {
         res.json({
             success: true,
             data: result,
-            pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+            pagination: { page: parsedPage, limit: parsedLimit, total, pages: Math.ceil(total / parsedLimit) },
         });
     } catch (err) { next(err); }
 };
@@ -61,7 +74,7 @@ exports.getOne = async (req, res, next) => {
 // POST /medicines  (admin, pharmacien)
 exports.create = async (req, res, next) => {
     try {
-        const medicine = await Medicine.create({ ...req.body, createdBy: req.user._id });
+        const medicine = await Medicine.create({ ...pickAllowed(req.body), createdBy: req.user._id });
         await logActivity(req, 'AJOUT_MEDICAMENT', 'Medicine', medicine._id, { nom: medicine.nom });
         res.status(201).json({ success: true, data: medicine });
     } catch (err) { next(err); }
@@ -72,7 +85,7 @@ exports.update = async (req, res, next) => {
     try {
         const medicine = await Medicine.findOneAndUpdate(
             { _id: req.params.id, deletedAt: null },
-            req.body,
+            pickAllowed(req.body),
             { new: true, runValidators: true }
         );
         if (!medicine) return res.status(404).json({ success: false, message: 'Médicament introuvable' });
@@ -102,6 +115,11 @@ exports.importCSV = async (req, res, next) => {
 
         const wb = xlsx.read(req.file.buffer, { type: 'buffer' });
         const rows = xlsx.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+
+        const MAX_IMPORT_ROWS = 500;
+        if (rows.length > MAX_IMPORT_ROWS) {
+            return res.status(400).json({ success: false, message: `Le fichier contient ${rows.length} lignes. Maximum autorise: ${MAX_IMPORT_ROWS}` });
+        }
 
         const created = [];
         const errors = [];

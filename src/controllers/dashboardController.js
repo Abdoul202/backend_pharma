@@ -8,9 +8,12 @@ const User = require('../models/User');
 exports.getStats = async (req, res, next) => {
     try {
         const now = new Date();
-        const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-        const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - 7);
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfWeek = new Date(startOfDay);
+        startOfWeek.setDate(startOfWeek.getDate() - 7);
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const oneYearAgo = new Date(now);
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
         const [
             caJour, caSemaine, caMois,
@@ -40,7 +43,7 @@ exports.getStats = async (req, res, next) => {
 
             // CA sur 12 mois
             Sale.aggregate([
-                { $match: { statut: 'valide', createdAt: { $gte: new Date(new Date().setFullYear(new Date().getFullYear() - 1)) } } },
+                { $match: { statut: 'valide', createdAt: { $gte: oneYearAgo } } },
                 { $group: { _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } }, ca: { $sum: '$total' } } },
                 { $sort: { '_id.year': 1, '_id.month': 1 } },
             ]),

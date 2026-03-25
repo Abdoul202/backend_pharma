@@ -3,28 +3,39 @@ const mongoose = require('mongoose');
 const User = require('../src/models/User');
 
 const seed = async () => {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pharmacy_manager_bf');
+    const uri = process.env.MONGODB_URI;
+    if (!uri) {
+        console.error('MONGODB_URI is required. Set it in .env');
+        process.exit(1);
+    }
+
+    await mongoose.connect(uri);
     console.log('Connected to MongoDB');
 
-    // Clear users only
-    await User.deleteMany();
-    console.log('Collections cleared');
+    const existingAdmin = await User.findOne({ role: 'admin' });
+    if (existingAdmin) {
+        console.log('Admin already exists. Skipping seed to avoid data loss.');
+        console.log(`Existing admin: ${existingAdmin.email}`);
+        await mongoose.connection.close();
+        process.exit(0);
+    }
 
-    // Créer uniquement le compte admin
-    // Les pharmaciens et caissiers sont créés par l'admin via l'API POST /api/users
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@pharmacy.bf';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@1234';
+
     const admin = await User.create({
         nom: 'Administrateur Principal',
-        email: process.env.ADMIN_EMAIL || 'admin@pharmacy.bf',
-        passwordHash: process.env.ADMIN_PASSWORD || 'Admin@1234',
+        email: adminEmail,
+        passwordHash: adminPassword,
         role: 'admin',
         actif: true,
     });
 
-    console.log('\n🎉 Seed terminé avec succès!');
-    console.log('─────────────────────────────────────');
-    console.log(`Admin: ${admin.email} / ${process.env.ADMIN_PASSWORD || 'Admin@1234'}`);
-    console.log('─────────────────────────────────────');
-    console.log("ℹ️  Connectez-vous en tant qu'admin pour créer les pharmaciens et caissiers.");
+    console.log('\nSeed termine avec succes!');
+    console.log(`Admin cree: ${admin.email}`);
+    console.log("Connectez-vous en tant qu'admin pour creer les pharmaciens et caissiers.");
+
+    await mongoose.connection.close();
     process.exit(0);
 };
 

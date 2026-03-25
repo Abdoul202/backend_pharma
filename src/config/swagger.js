@@ -10,7 +10,7 @@ const options = {
             contact: { name: 'PharmacyManager BF', email: 'support@pharmacymanager.bf' },
         },
         servers: [
-            { url: 'http://192.168.132.101:5000/api', description: 'Serveur de développement' },
+            { url: '/api', description: 'Relative path' },
         ],
         components: {
             securitySchemes: {

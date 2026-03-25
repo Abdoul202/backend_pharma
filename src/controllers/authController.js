@@ -1,13 +1,17 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const { logActivity } = require('../middleware/activityLogger');
 const logger = require('../config/logger');
+
+// Hash refresh token before storing in DB
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 const generateTokens = (userId) => {
     const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
     });
-    const refreshToken = jwt.sign({ userId }, process.env.JWT_SECRET, {
+    const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
         expiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
     });
     return { accessToken, refreshToken };
@@ -30,7 +34,7 @@ exports.login = async (req, res, next) => {
         const { accessToken, refreshToken } = generateTokens(user._id);
 
         // Save hashed refresh token
-        user.refreshToken = refreshToken;
+        user.refreshToken = hashToken(refreshToken);
         user.lastLogin = new Date();
         await user.save({ validateBeforeSave: false });
 
@@ -57,15 +61,15 @@ exports.refresh = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Refresh token requis' });
         }
 
-        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
         const user = await User.findById(decoded.userId).select('+refreshToken');
 
-        if (!user || user.refreshToken !== refreshToken) {
+        if (!user || user.refreshToken !== hashToken(refreshToken)) {
             return res.status(401).json({ success: false, message: 'Refresh token invalide ou expiré' });
         }
 
         const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
-        user.refreshToken = newRefreshToken;
+        user.refreshToken = hashToken(newRefreshToken);
         await user.save({ validateBeforeSave: false });
 
         res.json({ success: true, data: { accessToken, refreshToken: newRefreshToken } });

@@ -1,16 +1,29 @@
 const mongoose = require('mongoose');
 
+const lotDeductionSchema = new mongoose.Schema({
+    lotId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Lot',
+        required: true,
+    },
+    quantite: {
+        type: Number,
+        required: true,
+        min: 1,
+    },
+}, { _id: false });
+
 const saleItemSchema = new mongoose.Schema({
     medicineId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Medicine',
         required: true,
     },
-    lotId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Lot',
+    lotsUtilises: [lotDeductionSchema],
+    nomMedicament: {
+        type: String,
+        required: true,
     },
-    nomMedicament: String, // snapshot at time of sale
     quantite: {
         type: Number,
         required: true,
@@ -24,6 +37,7 @@ const saleItemSchema = new mongoose.Schema({
     sousTotal: {
         type: Number,
         required: true,
+        min: 0,
     },
 }, { _id: true });
 
@@ -74,20 +88,25 @@ const saleSchema = new mongoose.Schema({
     notes: String,
 }, { timestamps: true });
 
-// Auto-generate reference before save
-saleSchema.pre('save', async function (next) {
-    if (!this.reference) {
-        const count = await this.constructor.countDocuments();
-        const date = new Date();
-        const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-        this.reference = `VTE-${ymd}-${String(count + 1).padStart(5, '0')}`;
+// Atomic reference generation using a counter
+saleSchema.statics.generateReference = async function () {
+    const date = new Date();
+    const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+    const prefix = `VTE-${ymd}-`;
+
+    const last = await this.findOne({ reference: { $regex: `^${prefix}` } }).sort({ reference: -1 }).select('reference').lean();
+    let seq = 1;
+    if (last && last.reference) {
+        const parts = last.reference.split('-');
+        seq = parseInt(parts[parts.length - 1], 10) + 1;
     }
-    next();
-});
+    return `${prefix}${String(seq).padStart(5, '0')}`;
+};
 
 // Index for reporting
 saleSchema.index({ createdAt: -1 });
 saleSchema.index({ caissierRef: 1, createdAt: -1 });
 saleSchema.index({ statut: 1 });
+saleSchema.index({ reference: 1 });
 
 module.exports = mongoose.model('Sale', saleSchema);

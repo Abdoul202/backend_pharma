@@ -39,7 +39,16 @@ router.post('/',
     userController.create
 );
 
-router.put('/:id', authorize('admin'), userController.update);
+router.put('/:id',
+    authorize('admin'),
+    [
+        body('nom').optional().notEmpty().withMessage('Nom ne peut pas etre vide'),
+        body('role').optional().isIn(['admin', 'pharmacien', 'caissier']).withMessage('Role invalide'),
+        body('actif').optional().isBoolean().withMessage('Actif doit etre un booleen'),
+    ],
+    validate,
+    userController.update
+);
 router.patch('/:id/toggle-actif', authorize('admin'), userController.toggleActif);
 
 router.patch('/:id/reset-password',

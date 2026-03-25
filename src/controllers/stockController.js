@@ -8,20 +8,23 @@ const { checkAndCreateAlerts } = require('../services/alertService');
 exports.getLots = async (req, res, next) => {
     try {
         const { medicineId, actif, page = 1, limit = 20 } = req.query;
+        const parsedLimit = Math.min(parseInt(limit) || 20, 100);
+        const parsedPage = parseInt(page) || 1;
+
         const filter = {};
         if (medicineId) filter.medicineId = medicineId;
         if (actif !== undefined) filter.actif = actif === 'true';
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parsedPage - 1) * parsedLimit;
         const [lots, total] = await Promise.all([
-            Lot.find(filter).populate('medicineId', 'nom dci forme dosage').skip(skip).limit(parseInt(limit)).sort({ dateExpiration: 1 }),
+            Lot.find(filter).populate('medicineId', 'nom dci forme dosage').skip(skip).limit(parsedLimit).sort({ dateExpiration: 1 }),
             Lot.countDocuments(filter),
         ]);
 
         res.json({
             success: true,
             data: lots,
-            pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+            pagination: { page: parsedPage, limit: parsedLimit, total, pages: Math.ceil(total / parsedLimit) },
         });
     } catch (err) { next(err); }
 };

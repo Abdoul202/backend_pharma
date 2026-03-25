@@ -90,6 +90,14 @@ router.post('/',
 // Update (pharmacien, admin — brouillon only)
 router.patch('/:id',
     authorize('pharmacien', 'admin'),
+    [
+        body('patientNom').optional().isString().isLength({ max: 200 }).withMessage('Nom patient trop long (max 200)'),
+        body('notes').optional().isString().isLength({ max: 2000 }).withMessage('Notes trop longues (max 2000)'),
+        body('items').optional().isArray({ min: 1 }).withMessage('Articles requis'),
+        body('items.*.medicineId').optional().notEmpty().withMessage('ID medicament requis'),
+        body('items.*.quantite').optional().isInt({ min: 1 }).withMessage('Quantite invalide'),
+    ],
+    validate,
     commandeController.update
 );
 

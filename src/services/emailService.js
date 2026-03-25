@@ -2,16 +2,23 @@ const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const logger = require('../config/logger');
 
-const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.EMAIL_PORT) || 587,
-        secure: false,
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
+let transporter = null;
+
+const getTransporter = () => {
+    if (!transporter) {
+        transporter = nodemailer.createTransport({
+            host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+            port: parseInt(process.env.EMAIL_PORT) || 587,
+            secure: false,
+            pool: true,
+            maxConnections: 3,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+    }
+    return transporter;
 };
 
 const sendAlertEmail = async (alert, medicine) => {
@@ -21,12 +28,12 @@ const sendAlertEmail = async (alert, medicine) => {
         const admins = await User.find({ role: 'admin', actif: true }).select('email nom');
         if (admins.length === 0) return;
 
-        const transporter = createTransporter();
+        const mailer = getTransporter();
         const subject = alert.type === 'stock_bas'
             ? `⚠️ Stock bas — ${medicine.nom}`
             : `🗓️ Expiration proche — ${medicine.nom}`;
 
-        await transporter.sendMail({
+        await mailer.sendMail({
             from: process.env.EMAIL_FROM || 'PharmacyManager BF <no-reply@pharmacy.bf>',
             to: admins.map(a => a.email).join(', '),
             subject,

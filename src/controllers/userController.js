@@ -5,20 +5,23 @@ const { logActivity } = require('../middleware/activityLogger');
 exports.getAll = async (req, res, next) => {
     try {
         const { role, actif, page = 1, limit = 20 } = req.query;
+        const parsedLimit = Math.min(parseInt(limit) || 20, 100);
+        const parsedPage = parseInt(page) || 1;
+
         const filter = {};
         if (role) filter.role = role;
         if (actif !== undefined) filter.actif = actif === 'true';
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parsedPage - 1) * parsedLimit;
         const [users, total] = await Promise.all([
-            User.find(filter).skip(skip).limit(parseInt(limit)).sort({ createdAt: -1 }),
+            User.find(filter).skip(skip).limit(parsedLimit).sort({ createdAt: -1 }),
             User.countDocuments(filter),
         ]);
 
         res.json({
             success: true,
             data: users,
-            pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+            pagination: { page: parsedPage, limit: parsedLimit, total, pages: Math.ceil(total / parsedLimit) },
         });
     } catch (err) { next(err); }
 };
@@ -46,9 +49,14 @@ exports.create = async (req, res, next) => {
 exports.update = async (req, res, next) => {
     try {
         const { nom, role, actif } = req.body;
+        const updateData = {};
+        if (nom !== undefined) updateData.nom = nom;
+        if (role !== undefined) updateData.role = role;
+        if (actif !== undefined) updateData.actif = actif;
+
         const user = await User.findByIdAndUpdate(
             req.params.id,
-            { nom, role, actif },
+            updateData,
             { new: true, runValidators: true }
         );
         if (!user) return res.status(404).json({ success: false, message: 'Utilisateur introuvable' });

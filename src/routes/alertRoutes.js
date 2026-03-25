@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const alertController = require('../controllers/alertController');
-const { authenticate } = require('../middleware/authMiddleware');
+const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 router.use(authenticate);
 
@@ -35,7 +35,7 @@ router.use(authenticate);
 router.get('/low-stock', alertController.getLowStock);
 router.get('/expiring', alertController.getExpiring);
 router.get('/', alertController.getAlerts);
-router.patch('/mark-all-read', alertController.markAllRead);
-router.patch('/:id/lu', alertController.markAsRead);
+router.patch('/mark-all-read', authorize('admin', 'pharmacien'), alertController.markAllRead);
+router.patch('/:id/lu', authorize('admin', 'pharmacien'), alertController.markAsRead);
 
 module.exports = router;

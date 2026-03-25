@@ -11,12 +11,17 @@ const app = express();
 // ─── Security Middleware ────────────────────────────────────────────────────
 app.use(helmet());
 
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.MOBILE_URL,
+].filter(Boolean);
+// Fallback to localhost in development only
+if (allowedOrigins.length === 0) {
+    allowedOrigins.push('http://localhost:3000', 'http://localhost:5000');
+}
+
 app.use(cors({
-    origin: [
-        process.env.FRONTEND_URL || 'http://localhost:3000',
-        process.env.MOBILE_URL || 'http://localhost:5000',
-        'https://frontend-web-3mlr.onrender.com'
-    ],
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -40,7 +45,7 @@ const authLimiter = rateLimit({
 });
 
 // ─── Parsing Middleware ─────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Logging ────────────────────────────────────────────────────────────────
@@ -81,22 +86,24 @@ app.use((req, res) => {
 
 // ─── Global Error Handler ────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-    logger.error(`${err.status || 500} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+    const statusCode = err.status || 500;
+    logger.error(`${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
 
     if (err.name === 'ValidationError') {
-        return res.status(400).json({ success: false, message: 'Données invalides', errors: err.errors });
+        return res.status(400).json({ success: false, message: 'Donnees invalides', errors: err.errors });
     }
     if (err.name === 'CastError') {
         return res.status(400).json({ success: false, message: 'ID invalide' });
     }
     if (err.code === 11000) {
-        return res.status(409).json({ success: false, message: 'Cette entrée existe déjà' });
+        return res.status(409).json({ success: false, message: 'Cette entree existe deja' });
     }
 
-    res.status(err.status || 500).json({
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(statusCode).json({
         success: false,
-        message: err.message || 'Erreur interne du serveur',
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+        message: isProd && statusCode === 500 ? 'Erreur interne du serveur' : err.message,
+        ...(!isProd && { stack: err.stack }),
     });
 });
 
